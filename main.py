@@ -1,18 +1,22 @@
 import os
 import asyncio
-import httpx
 import json
 import re
 from datetime import datetime
 from telegram import Bot, Update
 from telegram.ext import Application, CommandHandler, ContextTypes
+from telegram.request import HTTPXRequest
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
+import httpx
 
 TOKEN = os.environ.get("TELEGRAM_TOKEN", "8723033052:AAFu2ve6UpLT-MJO7Qq3G3sMp8Y_atmV_ZQ")
 CHAT_ID = os.environ.get("CHAT_ID", "7360216132")
 ANTHROPIC_KEY = os.environ.get("ANTHROPIC_API_KEY", "")
 
 sent_headlines = set()
+
+def esc(t):
+    return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', str(t))
 
 async def fetch_news():
     today = datetime.now().strftime("%A %d de %B de %Y, %H:%M hrs")
@@ -75,15 +79,13 @@ async def send_news(bot: Bot, noticias: list):
         sent_headlines.add(titular)
         impacto = n.get("impacto", 4)
         flag = region_flags.get(n.get("region", ""), "🌐")
-        # Escape special chars for MarkdownV2
-        def esc(t): return re.sub(r'([_*\[\]()~`>#+\-=|{}.!])', r'\\\1', str(t))
         msg = (
-            f"{'🔴' * impacto} *NOTICIA DE ALTO IMPACTO*\n\n"
-            f"{flag} *{esc(titular)}*\n\n"
-            f"📌 _{esc(n.get('por_que_importa', ''))}_\n\n"
-            f"👉 Abre la herramienta y presiona *Escanear* para generar tu post\\."
+            f"{'🔴' * impacto} NOTICIA DE ALTO IMPACTO\n\n"
+            f"{flag} {titular}\n\n"
+            f"📌 {n.get('por_que_importa', '')}\n\n"
+            f"👉 Abre la herramienta y presiona Escanear para generar tu post."
         )
-        await bot.send_message(chat_id=CHAT_ID, text=msg, parse_mode="MarkdownV2")
+        await bot.send_message(chat_id=CHAT_ID, text=msg)
         await asyncio.sleep(1)
 
 
@@ -132,7 +134,7 @@ async def post_init(app: Application):
     print("🚀 Scheduler iniciado.")
     await app.bot.send_message(
         chat_id=CHAT_ID,
-        text="🚀 Radar de Noticias activado!\n\nTe avisaré cuando detecte noticias de alto impacto. Usa /escanear para revisar ahora mismo."
+        text="🚀 Radar de Noticias activado!\n\nTe avisare cuando detecte noticias de alto impacto. Usa /escanear para revisar ahora mismo."
     )
 
 
