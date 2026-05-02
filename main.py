@@ -16,35 +16,24 @@ sent_headlines = set()
 
 async def fetch_news():
     today = datetime.now().strftime("%A %d de %B de %Y, %H:%M hrs")
-    prompt = f"""Hoy es {today}.
+    prompt = f"""Hoy es {today}. Usa la herramienta de busqueda web para encontrar noticias REALES publicadas HOY.
 
-Eres el editor de una página de noticias de Instagram enfocada en Querétaro, México. Tu trabajo es detectar las noticias más relevantes e impactantes para publicar.
+Busca: noticias Queretaro hoy y noticias Mexico hoy y revisa los resultados.
 
-PRIORIDAD DE NOTICIAS:
-1. QUERÉTARO (prioridad máxima): política estatal, seguridad, obras públicas, economía local, gobierno municipal, sucesos importantes en el estado
-2. NACIONAL: noticias de México que afecten directamente a Querétaro o sean de impacto muy alto (4-5/5)
-3. INTERNACIONAL: solo si el impacto es máximo (5/5) y relevante para la audiencia queretana
+Selecciona solo noticias de impacto 4 o 5 sobre 5 publicadas en las ultimas 24 horas:
+1. QUERETARO: politica estatal, seguridad, obras, economia local
+2. NACIONAL: que afecten a Queretaro o sean muy importantes
+3. INTERNACIONAL: solo impacto maximo 5/5
 
-Busca noticias de las últimas horas. Solo incluye noticias con impacto 4 o 5 sobre 5.
+IMPORTANTE: Solo incluye noticias que encontraste en la busqueda web, no de tu conocimiento previo.
 
 Responde SOLO con JSON sin backticks:
-{{
-  "hay_urgentes": true,
-  "noticias": [
-    {{
-      "titular": "Titular periodístico máximo 12 palabras",
-      "region": "Querétaro|Nacional|Internacional",
-      "categoria": "Política|Seguridad|Economía|Obras|Sociedad|Internacional",
-      "impacto": 5,
-      "por_que_importa": "Una oración explicando por qué es importante para los queretanos"
-    }}
-  ]
-}}
+{{"hay_urgentes": true, "noticias": [{{"titular": "Titular maximo 12 palabras", "region": "Queretaro|Nacional|Internacional", "impacto": 5, "por_que_importa": "Por que es urgente postear esto"}}]}}
 
-Si no hay noticias de impacto 4-5, devuelve: {{"hay_urgentes": false, "noticias": []}}"""
+Si no encuentras noticias relevantes de hoy: {{"hay_urgentes": false, "noticias": []}}"""
 
     try:
-        async with httpx.AsyncClient(timeout=60) as client:
+        async with httpx.AsyncClient(timeout=90) as client:
             res = await client.post(
                 "https://api.anthropic.com/v1/messages",
                 headers={
@@ -54,7 +43,7 @@ Si no hay noticias de impacto 4-5, devuelve: {{"hay_urgentes": false, "noticias"
                 },
                 json={
                     "model": "claude-sonnet-4-20250514",
-                    "max_tokens": 1000,
+                    "max_tokens": 2000,
                     "tools": [{"type": "web_search_20250305", "name": "web_search"}],
                     "messages": [{"role": "user", "content": prompt}]
                 }
@@ -76,20 +65,17 @@ Si no hay noticias de impacto 4-5, devuelve: {{"hay_urgentes": false, "noticias"
 
 
 async def send_news(bot: Bot, noticias: list):
-    region_flags = {"Querétaro": "🔵⚪", "Nacional": "🇲🇽", "Internacional": "🌍"}
-    region_icons = {"Querétaro": "📍", "Nacional": "🇲🇽", "Internacional": "🌐"}
+    region_flags = {"Queretaro": "📍", "Nacional": "🇲🇽", "Internacional": "🌍"}
     for n in noticias:
         titular = n.get("titular", "")
         if titular in sent_headlines:
             continue
         sent_headlines.add(titular)
         impacto = n.get("impacto", 4)
-        region = n.get("region", "")
-        icon = region_icons.get(region, "📌")
-        estrellas = "🔴" * impacto
+        flag = region_flags.get(n.get("region", ""), "🌐")
         msg = (
-            f"{estrellas} NOTICIA DE ALTO IMPACTO\n\n"
-            f"{icon} [{region}] {titular}\n\n"
+            f"{'🔴' * impacto} NOTICIA DE ALTO IMPACTO\n\n"
+            f"{flag} {titular}\n\n"
             f"📌 {n.get('por_que_importa', '')}\n\n"
             f"👉 Abre la herramienta y presiona Escanear para generar tu post."
         )
@@ -98,7 +84,7 @@ async def send_news(bot: Bot, noticias: list):
 
 
 async def check_and_notify(bot: Bot):
-    print(f"[{datetime.now().strftime('%H:%M')}] Revisando noticias de Querétaro...")
+    print(f"[{datetime.now().strftime('%H:%M')}] Revisando noticias...")
     result = await fetch_news()
     if not result or not result.get("hay_urgentes"):
         print("Sin noticias urgentes.")
@@ -110,53 +96,44 @@ async def check_and_notify(bot: Bot):
 
 async def cmd_start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     await update.message.reply_text(
-        "👋 Hola Gerardo! Soy tu Radar de Noticias de Querétaro.\n\n"
-        "Monitoreo noticias de:\n"
-        "📍 Querétaro (prioridad)\n"
-        "🇲🇽 Nacional (cuando afecta a Qro)\n"
-        "🌍 Internacional (solo impacto máximo)\n\n"
+        "Hola Gerardo! Soy tu Radar de Noticias de Queretaro.\n\n"
         "Comandos:\n"
-        "📡 /escanear — Revisar noticias ahora\n"
-        "ℹ️ /estado — Ver si el radar está activo"
+        "/escanear - Buscar noticias ahora\n"
+        "/estado - Ver si el radar esta activo"
     )
 
-
 async def cmd_escanear(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("🔍 Buscando noticias de alto impacto para Querétaro...")
+    await update.message.reply_text("Buscando noticias en tiempo real... esto tarda unos segundos.")
     result = await fetch_news()
     if not result or not result.get("hay_urgentes") or not result.get("noticias"):
-        await update.message.reply_text("✅ Sin noticias de alto impacto en este momento.")
+        await update.message.reply_text("Sin noticias de alto impacto en este momento.")
         return
     await send_news(context.bot, result.get("noticias", []))
 
-
 async def cmd_estado(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    now = datetime.now().strftime("%d/%m/%Y %H:%M")
     await update.message.reply_text(
-        "✅ Radar activo — Enfoque: Querétaro\n"
-        "Revisando noticias cada 30 minutos.\n"
-        "Te aviso cuando el impacto es 4 o 5 sobre 5."
+        f"Radar activo - {now}\n"
+        "Revisando cada 30 minutos con busqueda web en tiempo real."
     )
-
 
 async def post_init(app: Application):
     scheduler = AsyncIOScheduler()
     scheduler.add_job(check_and_notify, "interval", minutes=30, args=[app.bot], id="news_check")
     scheduler.start()
-    print("🚀 Scheduler iniciado — Enfoque Querétaro.")
+    print("Scheduler iniciado.")
     await app.bot.send_message(
         chat_id=CHAT_ID,
-        text="📍 Radar de Noticias Querétaro activado!\n\nMonitoreando noticias locales, nacionales e internacionales con enfoque en Querétaro. Usa /escanear para revisar ahora mismo."
+        text=f"Radar reiniciado ({datetime.now().strftime('%d/%m/%Y %H:%M')}). Ahora busca noticias en tiempo real. Usa /escanear para probar."
     )
-
 
 def main():
     app = Application.builder().token(TOKEN).post_init(post_init).build()
     app.add_handler(CommandHandler("start", cmd_start))
     app.add_handler(CommandHandler("escanear", cmd_escanear))
     app.add_handler(CommandHandler("estado", cmd_estado))
-    print("🤖 Bot Querétaro iniciado...")
+    print("Bot iniciado...")
     app.run_polling(allowed_updates=["message"])
-
 
 if __name__ == "__main__":
     main()
